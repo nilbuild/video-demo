@@ -345,7 +345,8 @@ export function mixArgs(
       : `${heads}amix=inputs=${lines.length}:normalize=0:dropout_transition=0[spoken]`;
 
   /**
-   * A held last frame, rather than a last word cut in half.
+   * A held last frame, rather than a last word cut in half — or bleeding
+   * into the next clip.
    *
    * `actor.say` already holds long enough for its own line in the ordinary
    * case, so this is the safety net for the closing line of a scene, where
@@ -354,10 +355,18 @@ export function mixArgs(
    * come back in here from the recorder rather than being guessed at: it is
    * the same encode the silent clip had, run once more with a longer tail.
    *
+   * Any overrun pads, not just one past a tolerance. `stitchTour` concatenates
+   * every clip in a theme with a stream copy, so a clip whose audio track runs
+   * even slightly longer than its video track has narration that keeps
+   * playing after the concat demuxer has already moved on to the next file's
+   * timeline — heard as the tail of one scene's line overlapping the start of
+   * the next one's. Padding the video to match the audio, however small the
+   * gap, is what keeps a clip's own duration honest for concatenation.
+   *
    * Without padding the video is copied untouched, which is the common path
    * and costs nothing.
    */
-  const padding = overrun > 0.08;
+  const padding = overrun > 0;
   const video = padding
     ? [
         '-filter_complex',
